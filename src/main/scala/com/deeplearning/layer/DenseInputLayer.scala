@@ -3,7 +3,7 @@ package com.deeplearning.layer
 import breeze.linalg.{DenseMatrix, DenseVector, linspace, normalize}
 import breeze.plot.{Figure, plot, scatter}
 import com.deeplearning.Network.{generateRandomBiasFloat, generateRandomFloat}
-import com.deeplearning.bspline.{BSpline, BSplineFigure, KnotPoints}
+import com.deeplearning.bspline.{BSpline, BSplineFigure, ControlPointUpdater, KnotPoints}
 import com.deeplearning.bspline.KANControlPoints.initializeControlPoints2D
 import com.deeplearning.{ActivationManager, ComputeActivation, CostManager, Network}
 import com.deeplearning.samples.{CifarData, MnistData, TrainingDataSet}
@@ -15,11 +15,12 @@ class DenseInputLayer extends InputLayer {
   var nablas_w_tmp = Array.empty[Float]
   var knots : DenseVector[Double] = _
   var k = 3 //degree of the spline
-  var c = k + 2
+  var c = k + 1
   var controlPoints :Array[Array[DenseMatrix[Double]]]= _
   var ts :Array[Array[Float]]= _
   var ws = Array[Float]()
   var wb = Array[Float]()
+  var inputSize = 0
 
   private var dataSet: TrainingDataSet = if (Network.trainingSample == "Mnist") {
     println("Loading Dataset MINST")
@@ -51,6 +52,7 @@ class DenseInputLayer extends InputLayer {
       wInitialized = true
       wb =  generateRandomBiasFloat(receiverUCs)
       ws = Array.fill[Float](receiverUCs)(1.0f)
+      inputSize = endIndex-startIndex
 
       // randomly initializing the control points
       controlPoints = Array.fill(endIndex-startIndex, receiverUCs) {
@@ -81,7 +83,7 @@ class DenseInputLayer extends InputLayer {
     val data = DenseVector(ts2)
     val normalizedData = normalize(data).toArray
 
-    BSplineFigure.draw(controlPoints(0)(0),knots,k,epoch, layer,internalSubLayer)
+  //  BSplineFigure.draw(controlPoints(0)(0),knots,k,epoch, layer,internalSubLayer)
 
     //split the array to be sent to layer +1 UCs
     //val splittedLayerDim = Network.HiddenLayersDim(layer)
@@ -137,15 +139,20 @@ class DenseInputLayer extends InputLayer {
        */
       val tmp2 = CostManager.matMulScalar(learningRate / Network.MiniBatch,nablas_w_tmp)
       val tmp1 = CostManager.matMulScalar(1 - learningRate * (regularisation / nInputs), this.ts.flatten)
+      val diff = CostManager.minus2(tmp1, tmp2).grouped(inputSize).map(_.sum).toArray
 
-      val ttt = ts.map(x=> {
-        x.map(y=> {
-          val findKnot = BSpline.findSpan(y.toDouble,k,c,knots.toArray)
-          val test2 = 1
-        })
-      })
+      val tess = ts
+      val ttt = ts.zipWithIndex.map {
+        case (element, i) =>
+          element.zipWithIndex.map {
+            case (subelement, j) => {
+              val test = controlPoints(i)(j)
+              controlPoints(i)(j) = ControlPointUpdater.updateControlPoints(ts(i)(j), knots, controlPoints(i)(j).toDenseVector, k, diff(j)).toDenseMatrix
+              val test2 = controlPoints(i)(j)
+            }
+          }
+      }
 
-      val updated = CostManager.minus2(tmp1, tmp2)
      // weights =  updated
 //      weights = CostManager.minus2(tmp1, tmp2)
 

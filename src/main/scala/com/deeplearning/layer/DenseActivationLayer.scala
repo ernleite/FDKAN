@@ -129,7 +129,6 @@ class DenseActivationLayer extends ActivationLayer {
 
     if (!backPropagateReceived.contains(correlationId)) {
       backPropagateReceived += (correlationId -> true)
-      deltaTmp += (correlationId -> Array.fill(delta.size)(0f))
     }
     val previousLayer = layer - 1
     var hiddenLayerStep = 0
@@ -147,48 +146,14 @@ class DenseActivationLayer extends ActivationLayer {
       fromArraySize = Network.getHiddenLayersDim(layer, "hidden")
     }
 
-   // val prime = ActivationManager.ComputePrime(Network.getActivationLayersType(layer), this.Z(correlationId))
-/*
-    if (messagePropagateReceived(correlationId) < arraySize2) {
-      if (Network.debugActivity)
-        println("Prime " + layer + " " + internalSubLayer)
-      deltaTmp(correlationId) = CostManager.sum2(deltaTmp(correlationId), delta)
-    }
-    else {
-
- */
-      //deltaTmp(correlationId) = CostManager.sum2(deltaTmp(correlationId), delta)
       minibatch(correlationId) += 1
-      var deltaprime: Array[Float] = Array.fill(1)(0f)
-      if (Network.debugActivity)
-        println("Prime " + layer + " " + internalSubLayer)
-      //if (prime.size < delta.size) {
-        //val test = deltaTmp(correlationId).grouped(prime.size).toArray.transpose.map(_.sum)
-        //test = CostManager.sum2(test, splitedDelta(2))
-        //test = CostManager.sum2(test, splitedDelta(3))
-        //test = CostManager.sum2(test, splitedDelta(4))
 
-        //val atranspose = DenseMatrix(weighted(correlationId)).t
-      //deltaTmp(correlationId) = CostManager.dotProduct(, deltaprime)
-      //deltaprime = dotProduct(prime, delta)
-      //}
-      //else
-       // deltaprime = dotProduct(prime, deltaTmp(correlationId))
-
-      if (Network.NaN) {
-        deltaprime = CostManager.EliminateNaN(deltaprime)
-      }
-      //deltaprime = CostManager.matMulScalar(arraySize2,deltaprime)
-      nablas_b += (correlationId -> deltaprime)
-
-      if (Network.debugActivity)
-        println("Backpropagation AL (" + layer + ") " + " " + internalSubLayer)
       if (LayerManager.IsFirst(previousLayer)) {
         hiddenLayerStep = LayerManager.GetInputLayerStep()
         arraySize = Network.InputLayerDim
         for (i <- 0 until arraySize) {
           val inputLayerRef = Network.LayersInputRef("inputLayer_" + i)
-          inputLayerRef ! ComputeInputs.BackPropagate(correlationId, deltaprime, learningRate, regularisation, nInputs, i, ucIndex, params)
+          inputLayerRef ! ComputeInputs.BackPropagate(correlationId, delta, learningRate, regularisation, nInputs, i, ucIndex, params)
         }
       }
       else {
@@ -198,36 +163,10 @@ class DenseActivationLayer extends ActivationLayer {
           if (Network.debugActivity)
             println("Send WL " + previousLayer + " " + i + " " + internalSubLayer)
           val intermediateLayerRef = Network.LayersIntermediateRef("weightedLayer_" + previousLayer + "_" + i)
-          intermediateLayerRef ! ComputeWeighted.BackPropagate(correlationId, deltaprime, learningRate, regularisation, nInputs, previousLayer, i, ucIndex, params)
+          intermediateLayerRef ! ComputeWeighted.BackPropagate(correlationId, delta, learningRate, regularisation, nInputs, previousLayer, i, ucIndex, params)
         }
       }
-    //}
-
-    // check if we reach the last mini-bacth
-    var verticalUCs = Network.getHiddenLayersDim(layer, "hidden")
-
-    if ((Network.MiniBatch * fromArraySize) == minibatch.values.sum) {
-
-      parameters("min") = "0"
-      parameters("max") = "0"
-
-      //if (Network.debug && Network.debugLevel == 4) context.log.info(s"Applying gradients to bias layer $layer / $internalSubLayer")
-      nablas_b.clear()
-      backPropagateReceived.clear()
-      weighted.clear()
-      activation.clear()
-      inProgress.clear()
-      shardReceived.clear()
-      minibatch.clear()
-      Z.clear()
-      weightedMin.clear()
-      weightedMax.clear()
-      deltaTmp.clear()
-      weightsTmp.clear()
-      true
-    }
-    else
-      false
+    true
   }
 
   override def FeedForwardTest(correlationId: String, shardedWeighted: Array[Float], internalSubLayer: Int, layer: Int, shards: Int): Array[Float] = {

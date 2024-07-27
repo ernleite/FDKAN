@@ -1,12 +1,12 @@
 package com.deeplearning.layer
 
 import breeze.linalg.{DenseMatrix, DenseVector, normalize}
-import com.deeplearning.CostManager.{dotProduct, dotProduct3, dotProduct4, dotProduct6, matMul, matMul3}
-import com.deeplearning.Network.{debug, generateRandomBiasFloat, generateRandomFloat, getHiddenLayersDim, heInitialization, weightedPenalty}
+import com.deeplearning.CostManager.{dotProduct3}
+import com.deeplearning.Network.{generateRandomBiasFloat}
 import com.deeplearning.bspline.KANControlPoints.initializeControlPoints2D
 import com.deeplearning.bspline.{BSpline, BSplineFigure, KnotPoints}
 import com.deeplearning.{ActivationManager, ComputeActivation, ComputeOutput, CostManager, LayerManager, Network}
-
+import com.deeplearning.bspline.ControlPointUpdater
 import java.time.{Duration, Instant}
 
 
@@ -21,7 +21,7 @@ class DenseWeightedLayer extends WeightedLayer {
   var nablas_w_tmp = Array.empty[Float]
   var knots : DenseVector[Double] = _
   var k = 3 //degree of the spline
-  var c = k + 2
+  var c = k + 1
   var controlPoints :Array[Array[DenseMatrix[Double]]]= _
   var ts :Array[Array[Float]]= _
 
@@ -80,7 +80,6 @@ class DenseWeightedLayer extends WeightedLayer {
       controlPoints = Array.fill(activationsLength, receiverUCs) {
         initializeControlPoints2D(c)
       }
-
       knots = KnotPoints.initializeKnotPoints2D(c,k)
     }
 
@@ -121,7 +120,7 @@ class DenseWeightedLayer extends WeightedLayer {
       val data = DenseVector(ts2)
       val normalizedData = normalize(data).toArray
 
-      BSplineFigure.draw(controlPoints(0)(0),knots,k,epoch, layer,internalSubLayer)
+      //BSplineFigure.draw(controlPoints(0)(0),knots,k,epoch, layer,internalSubLayer)
 
       val endedAt = Instant.now
       val duration = Duration.between(startedAt, endedAt).toMillis
@@ -323,19 +322,19 @@ class DenseWeightedLayer extends WeightedLayer {
         */
         val tmp2 = CostManager.matMulScalar(learningRate / Network.MiniBatch,nablas_w_tmp)
         val tmp1 = CostManager.matMulScalar(1 - learningRate * (regularisation / nInputs), this.ts.flatten)
+        val diff = CostManager.minus2(tmp1, tmp2).grouped(ucIndex).map(_.sum).toArray
 
+        val tess = ts
         val ttt = ts.zipWithIndex.map {
           case (element, i) =>
             element.zipWithIndex.map {
               case (subelement, j) => {
-                val ct = ControlPointUpdater(ts(i)(j), knots, controlPoints(i)(j).toDenseVector, k, 0.1)
-                val test2 = 1
+                val test = controlPoints(i)(j)
+                controlPoints(i)(j) = ControlPointUpdater.updateControlPoints(ts(i)(j), knots, controlPoints(i)(j).toDenseVector, k, diff(i)).toDenseMatrix
+                val test2 = controlPoints(i)(j)
               }
             }
         }
-        val updated = CostManager.minus2(tmp1, tmp2)
-        weights =  updated
-
 
         fromInternalReceived.clear()
         activation.clear()
