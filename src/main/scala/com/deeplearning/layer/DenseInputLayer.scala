@@ -137,7 +137,8 @@ class DenseInputLayer extends InputLayer {
       val nablaflaten = reduce
 
        */
-      val tmp2 = CostManager.matMulScalar(learningRate / Network.MiniBatch,nablas_w_tmp)
+      val reduce = nablas_w_tmp.grouped(inputSize).map(_.sum).toArray
+      val tmp2 = CostManager.matMulScalar(learningRate / Network.MiniBatch,reduce)
       val tmp1 = CostManager.matMulScalar(1 - learningRate * (regularisation / nInputs), this.ts.flatten)
       val diff = CostManager.minus2(tmp1, tmp2).grouped(inputSize).map(_.sum).toArray
 
