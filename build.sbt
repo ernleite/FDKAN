@@ -35,7 +35,7 @@ lazy val `akka-sample-cluster-scala` = project
       "commons-cli"%"commons-cli" %"1.5.0",
       "org.bytedeco" % "openblas" % "0.3.26-1.5.10",
       "dev.ludovic.netlib" % "parent" % "3.0.3" pomOnly(),
-      //"com.intel.dal" % "dal" % "2023.1.0.31217"
+      "org.scala-lang.modules" %% "scala-swing" % "3.0.0"
     ),
     run / fork := true,
     Global / cancelable := false,

@@ -502,6 +502,40 @@ object CostManager {
     }
   }
 
+
+  def minus2(mat1: Array[Array[Float]], mat2: Array[Float]): Array[Float] = {
+    if (Network.GpuMode) {
+      val manager: NDManager = NDManager.newBaseManager(Device.gpu(0))
+      val array1 = manager.create(mat1)
+      val array2 = manager.create(mat2)
+      val fromMat1: NDArray = manager.from(array1)
+      val fromMat2: NDArray = manager.from(array2)
+
+      val c = fromMat1.sub(fromMat2).toFloatArray
+      fromMat1.close()
+      fromMat2.close()
+      array1.close()
+      array2.close()
+      manager.close()
+      c
+    }
+    else {
+      val manager: NDManager = NDManager.newBaseManager(Device.cpu())
+      val array1 = manager.create(mat1)
+      val array2 = manager.create(mat2)
+      val fromMat1: NDArray = manager.from(array1)
+      val fromMat2: NDArray = manager.from(array2)
+
+      val c = fromMat1.sub(fromMat2).toFloatArray
+      fromMat1.close()
+      fromMat2.close()
+      array1.close()
+      array2.close()
+      manager.close()
+      c
+    }
+  }
+
   def minus(mat1: Array[Float], mat2: Array[Float]): Array[Float] = {
     if (Network.GpuMode) {
       val manager: NDManager = NDManager.newBaseManager(Device.gpu(0))

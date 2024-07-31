@@ -73,14 +73,12 @@ class DenseActivationLayer extends ActivationLayer {
    // if (Network.debug && Network.debugLevel >= 5) context.log.info(correlationId + " " + shardReceived(correlationId).toString)
     //all received. Lets compute the activation function
     if (shards == shardReceived(correlationId) && inProgress(correlationId)) {
-      //val normalizeWeights = Normalization.forward(weighted(correlationId), weighted.size)
-      //val min = weighted(correlationId).min
-      //val max = weighted(correlationId).max
-     // val norm = batchNormalize(weighted(correlationId))
+      this.activation(correlationId) = weighted(correlationId)
 
       //val mav = Normalisation.getMeanAndVariance(activation(correlationId))
       //activation(correlationId) = Normalisation.batchNormalize(activation(correlationId), mav._1, mav._3, this.gamma, this.beta)
-      this.activation(correlationId) = weighted(correlationId)
+
+      val ttt = this.activation(correlationId)
       if (counterTraining % Network.minibatchBuffer == 0 && Network.debug) {
         for (j <- activation(correlationId).indices) {
           println("Activation Layer ("+layer +"): " + activation(correlationId)(j) + " " + bias(j))
@@ -89,22 +87,7 @@ class DenseActivationLayer extends ActivationLayer {
         println("--------------------------------------------------------------------")
       }
 
-      if (Network.CheckNaN) {
-        val nanIndices = activation(correlationId).zipWithIndex.filter { case (value, _) => value.isNaN || value == 0f }
-        // Check if there are any NaN values
-        if (nanIndices.nonEmpty) {
-          println("NaN values found at indices:")
-          nanIndices.foreach { case (_, index) => println(index) }
-        } else {
-          println("No NaN values found in the array.")
-        }
-      }
-
-      if (Network.NaN) {
-        activation(correlationId) = CostManager.EliminateNaN(activation(correlationId))
-      }
-
-      //context.log.info(s"${Network.Activation(layer)} on ${layer} / ${internalSubLayer} with ${activation(correlationId).length} activations : Done !")
+     //context.log.info(s"${Network.Activation(layer)} on ${layer} / ${internalSubLayer} with ${activation(correlationId).length} activations : Done !")
       inProgress(correlationId) = false
       shardReceived(correlationId) = 0
 
@@ -166,7 +149,28 @@ class DenseActivationLayer extends ActivationLayer {
           intermediateLayerRef ! ComputeWeighted.BackPropagate(correlationId, delta, learningRate, regularisation, nInputs, previousLayer, i, ucIndex, params)
         }
       }
-    true
+
+    if ((Network.MiniBatch * fromArraySize) == minibatch.values.sum) {
+      parameters("min") = "0"
+      parameters("max") = "0"
+
+      //if (Network.debug && Network.debugLevel == 4) context.log.info(s"Applying gradients to bias layer $layer / $internalSubLayer")
+      nablas_b.clear()
+      backPropagateReceived.clear()
+      weighted.clear()
+      activation.clear()
+      inProgress.clear()
+      shardReceived.clear()
+      minibatch.clear()
+      Z.clear()
+      weightedMin.clear()
+      weightedMax.clear()
+      deltaTmp.clear()
+      weightsTmp.clear()
+      true
+    }
+    else
+      false
   }
 
   override def FeedForwardTest(correlationId: String, shardedWeighted: Array[Float], internalSubLayer: Int, layer: Int, shards: Int): Array[Float] = {
@@ -205,12 +209,7 @@ class DenseActivationLayer extends ActivationLayer {
 
     //all received. Lets compute the activation function
     if (shards == shardReceived(correlationId) && inProgress(correlationId)) {
-      val z = CostManager.sum2(weighted(correlationId), bias)
-      activation(correlationId) = ActivationManager.ComputeZ(Network.getActivationLayersType(layer), z)
-
-      if (Network.NaN) {
-        activation(correlationId) = CostManager.EliminateNaN(activation(correlationId))
-      }
+      activation(correlationId) = weighted(correlationId)
 
       inProgress(correlationId) = false
       shardReceived(correlationId) = 0

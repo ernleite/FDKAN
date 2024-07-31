@@ -8,15 +8,16 @@ import com.deeplearning.Network
 import scala.util.Random
 
 object KANControlPoints {
-
+  val rangeMin = -1.0
+  val rangeMax = 1.0
   def initializeControlPoints2D(numPoints: Int = 4, minX: Double = 0.0, maxX: Double = 1.0, minY: Double = 0.0, maxY: Double = 1.0): DenseMatrix[Double] = {
     require(numPoints >= 2, "Number of points must be at least 2")
 
     // Create uniform distributions for X and Y coordinates
     val random = new Random()
 
-    val uniformX =  random.between(0.0, 10.0)
-    val uniformY =  random.between(-10.0, 10.0)
+    val uniformX =  random.between(rangeMin, rangeMax)
+    val uniformY =  random.between(rangeMin, rangeMax)
 
     // Initialize the control points matrix
     val controlPoints = DenseMatrix.zeros[Double](numPoints, 2)
@@ -26,14 +27,14 @@ object KANControlPoints {
     xCoords(0) = minX
     xCoords(numPoints - 1) = maxX
     for (i <- 1 until numPoints - 1) {
-      xCoords(i) =  random.between(0.0, 10.0)
+      xCoords(i) =  random.between(rangeMin, rangeMax)
     }
     val sortedXCoords = DenseVector(xCoords.toArray.sorted)
 
     // Fill the matrix with the sorted x-coordinates and random y-coordinates
     for (i <- 0 until numPoints) {
       controlPoints(i, 0) = sortedXCoords(i)  // Sorted X coordinate
-      controlPoints(i, 1) = random.between(-10.0, 10.0) // Random Y coordinate
+      controlPoints(i, 1) = random.between(rangeMin, rangeMax) // Random Y coordinate
     }
 
     controlPoints

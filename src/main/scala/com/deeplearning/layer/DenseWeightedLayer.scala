@@ -1,12 +1,13 @@
 package com.deeplearning.layer
 
 import breeze.linalg.{DenseMatrix, DenseVector, normalize}
-import com.deeplearning.CostManager.{dotProduct3}
-import com.deeplearning.Network.{generateRandomBiasFloat}
+import com.deeplearning.CostManager._
+import com.deeplearning.Network.generateRandomBiasFloat
 import com.deeplearning.bspline.KANControlPoints.initializeControlPoints2D
 import com.deeplearning.bspline.{BSpline, BSplineFigure, KnotPoints}
 import com.deeplearning.{ActivationManager, ComputeActivation, ComputeOutput, CostManager, LayerManager, Network}
 import com.deeplearning.bspline.ControlPointUpdater
+
 import java.time.{Duration, Instant}
 
 
@@ -23,7 +24,8 @@ class DenseWeightedLayer extends WeightedLayer {
   var k = 3 //degree of the spline
   var c = k + 1
   var controlPoints :Array[Array[DenseMatrix[Double]]]= _
-  var ts :Array[Array[Float]]= _
+  var ts = scala.collection.mutable.HashMap.empty[String,Array[Array[Float]]]
+  var tsTest : Array[Array[Float]] = null
 
   var ws = Array[Float]()
   var wb = Array[Float]()
@@ -90,6 +92,7 @@ class DenseWeightedLayer extends WeightedLayer {
       this.fromInternalReceived += (correlationId -> 0)
       this.activation += (correlationId -> activations)
       this.deltas = Array.fill(activationsLength)(0f)
+      this.ts += (correlationId -> null)
     }
 
     if (!inProgress.contains(correlationId)) {
@@ -106,21 +109,27 @@ class DenseWeightedLayer extends WeightedLayer {
       val callersize = Network.getHiddenLayersDim(layer, "weighted")
       activation(correlationId) = CostManager.sum2(activation(correlationId), activations)
       inProgress(correlationId) = false
-
-      ts = controlPoints.indices.map (
+      activation(correlationId) = normalize(DenseVector(activation(correlationId))).toArray
+      ts(correlationId) = controlPoints.indices.map (
         i => controlPoints(i).indices.map {
           j =>
             val x = activation(correlationId)(i)
-            wb(j) * ActivationManager.ComputeZ(Network.getActivationLayersType(layer), x) + ws(j) * BSpline.compute(controlPoints(i)(j),k,x,knots).toFloat
+            val y = ActivationManager.ComputeZ(Network.getActivationLayersType(layer), x) + BSpline.compute(controlPoints(i)(j),k,x,knots).toFloat
+            if (y>1.0f) {
+              println("-----------------------------------------")
+              println("Threshold " + y )
+              println("-----------------------------------------")
+            }
+            y
         }.toArray
       ).toArray
 
       //sum the same index
-      val ts2 = ts.transpose.map(_.sum)
+      val ts2 =   ts(correlationId).transpose.map(_.sum)
       val data = DenseVector(ts2)
       val normalizedData = normalize(data).toArray
 
-      //BSplineFigure.draw(controlPoints(0)(0),knots,k,epoch, layer,internalSubLayer)
+     // BSplineFigure.draw(controlPoints(0)(0),knots,k,epoch, layer,internalSubLayer)
 
       val endedAt = Instant.now
       val duration = Duration.between(startedAt, endedAt).toMillis
@@ -138,20 +147,12 @@ class DenseWeightedLayer extends WeightedLayer {
 
       if (!LayerManager.IsLast(nextLayer)) {
         for (i: Int <- 0 until Network.getHiddenLayersDim(nextLayer, "hidden")) {
-          val arr = normalizedData
-          val weighted = arr.grouped(activations.size).toArray.map(_.sum)
-          //parameters("weighted_min") = weighted.min.toString
-          //parameters("weighted_max") = weighted.max.toString
           val actorHiddenLayer = Network.LayersHiddenRef("hiddenLayer_" + nextLayer + "_" + i)
           actorHiddenLayer ! ComputeActivation.ComputeZ(epoch, correlationId, yLabel, trainingCount, normalizedData, i, nextLayer, callersize,params, weights)
         }
       }
       else if (LayerManager.IsLast(nextLayer)) {
         for (i <- 0 until Network.OutputLayerDim) {
-          val arr = normalizedData
-          val weighted = arr.grouped(activations.size).toArray.map(_.sum)
-          //parameters("weighted_min") = weighted.min.toString
-          //parameters("weighted_max") = weighted.max.toString
           val actorOutputLayer = Network.LayersOutputRef("outputLayer_" + i)
           actorOutputLayer ! ComputeOutput.Compute(epoch, correlationId, yLabel, trainingCount, normalizedData, i, layer+1, callersize, params)
         }
@@ -207,33 +208,40 @@ class DenseWeightedLayer extends WeightedLayer {
 
       val newdelta = delta
 
-      if (nablas_w_tmp.isEmpty)
-        nablas_w_tmp = dotProduct3(delta.length, delta, activation(correlationId)).flatten
-      else
-        nablas_w_tmp = CostManager.sum2(nablas_w_tmp,dotProduct3(delta.length, delta, activation(correlationId)).flatten )
-/*
-      if (arraySize == 1) {
+      if (nablas_w_tmp.isEmpty) {
+        val tt = controlPoints.indices.map (
+          i => controlPoints(i).indices.map {
+            val x = activation(correlationId)
+            val siluPrime = ActivationManager.ComputePrime(Network.getActivationLayersType(layer), x)
+            j =>
+              val tttt =   ts(correlationId)(i)(j)
+              val splinePrime = BSpline.bsplineDerivative(  ts(correlationId)(i)(j), controlPoints(i)(j),knots,k)
+              val finald = siluPrime(j) + splinePrime.toFloat
+              finald
+          }.toArray
+        ).toArray
 
-        val upd = dotProduct3(delta.length, delta, activation(correlationId)).flatten
-        val weightsNabla = nablas_w(correlationId).grouped(this.weights.size / arraySize).toArray
-        weightsNabla.update(fromInternalSubLayer, upd)
-        nablas_w(correlationId) = weightsNabla.flatten
+        nablas_w_tmp = CostManager.matMul(tt.transpose, delta)
       }
       else {
-        //println("Layer " + layer + " " + fromInternalSubLayer)
-        //val upd = dotProduct3(this.weights.size / arraySize, delta, activation(correlationId)).flatten
-        //nablas_w(correlationId) = upd
-        val upd = dotProduct3(delta.length, delta, activation(correlationId)).flatten
-        val weightsNabla = nablas_w(correlationId).grouped(this.weights.size / arraySize).toArray
-        weightsNabla.update(fromInternalSubLayer, upd)
-        nablas_w(correlationId) = weightsNabla.flatten
+        val tt = controlPoints.indices.map (
+          i => controlPoints(i).indices.map {
+            val x = activation(correlationId)
+            val siluPrime = ActivationManager.ComputePrime(Network.getActivationLayersType(layer), x)
+            j =>
+              val splinePrime = BSpline.bsplineDerivative(  ts(correlationId)(i)(j), controlPoints(i)(j),knots,k)
+              val finald = siluPrime(j) +splinePrime.toFloat
+              finald
+          }.toArray
+        ).toArray
+        nablas_w_tmp = CostManager.sum2(nablas_w_tmp,CostManager.matMul(tt.transpose, delta) )
       }
-*/
+
       var delta2 = Array.empty[Float]
       if (arraySize == 1) {
         if (Network.debugActivity)
           println("WL UNIQUE UPDATED  Delta Layer:" + layer + " Index: " + ucIndex + " FROM: " + fromInternalSubLayer)
-        val compute = CostManager.dotProduct4(ts.transpose, delta)
+        val compute = CostManager.dotProduct4(  ts(correlationId).transpose, delta)
         delta2 =compute
       }
       else {
@@ -287,6 +295,7 @@ class DenseWeightedLayer extends WeightedLayer {
       // check if we reach the last mini-bacth
 
       val verticalUCs = Network.getHiddenLayers(layer, "weigthed")
+
       if (Network.MiniBatch *fromArraySize  == minibatch.values.sum) {
         parameterSended = false
         parameters("min") = "0"
@@ -294,7 +303,7 @@ class DenseWeightedLayer extends WeightedLayer {
         //val mav = Normalisation.getMeanAndVariance(activation(correlationId))
         //activation(correlationId) = Normalisation.batchNormalize(activation(correlationId), mav._1, mav._3, 0.1f, 0.1f)
         // println("Apply gradients layer " + layer + " " + internalSubLayer + " " + fromInternalSubLayer)
-        synchronized()
+        //synchronized()
 
         /*
 
@@ -320,22 +329,24 @@ class DenseWeightedLayer extends WeightedLayer {
         val reduce = flatten.transpose.map(_.sum)
         val nablaflaten = reduce
         */
+        val tmp1 = CostManager.matMulScalar(1 - learningRate * (regularisation / nInputs), this.ts(correlationId).flatten)
         val tmp2 = CostManager.matMulScalar(learningRate / Network.MiniBatch,nablas_w_tmp)
-        val tmp1 = CostManager.matMulScalar(1 - learningRate * (regularisation / nInputs), this.ts.flatten)
-        val diff = CostManager.minus2(tmp1, tmp2).grouped(ucIndex).map(_.sum).toArray
-
-        val tess = ts
-        val ttt = ts.zipWithIndex.map {
+        val tmp3 = tmp1.grouped(group).toArray
+        val tmp4 = CostManager.minus2(tmp3, tmp2)
+        val tmp5 = CostManager.divide(tmp4, tmp4.length)
+        //println("Before : " +  controlPoints(0)(0).toArray(4) + " "  + controlPoints(0)(0).toArray(5)+ " "  + controlPoints(0)(0).toArray(6)+ " "  + controlPoints(0)(0).toArray(7))
+        val ttt =   ts(correlationId).zipWithIndex.map {
           case (element, i) =>
             element.zipWithIndex.map {
               case (subelement, j) => {
-                val test = controlPoints(i)(j)
-                controlPoints(i)(j) = ControlPointUpdater.updateControlPoints(ts(i)(j), knots, controlPoints(i)(j).toDenseVector, k, diff(i)).toDenseMatrix
-                val test2 = controlPoints(i)(j)
+               // println("Before : " + controlPoints(i)(j))
+                controlPoints(i)(j) = ControlPointUpdater.updateControlPoints(  ts(correlationId)(i)(j), knots, controlPoints(i)(j), k, tmp5(i+j)).toDenseMatrix
+               // println("After : " + controlPoints(i)(j))
               }
             }
         }
-
+        //println("After : " + controlPoints(0)(0).toArray(4) + " "  + controlPoints(0)(0).toArray(5)+ " "  + controlPoints(0)(0).toArray(6)+ " "  + controlPoints(0)(0).toArray(7))
+        this.ts -= (correlationId)
         fromInternalReceived.clear()
         activation.clear()
         backPropagateReceived.clear()
@@ -370,6 +381,7 @@ class DenseWeightedLayer extends WeightedLayer {
     }
     weights =  w2.flatten
   }
+
   override def FeedForwardTest(correlationId: String, activations: Array[Float], ucIndex: Int, layer: Int): Array[Array[Float]] =  {
     val nextLayer = layer + 1
     counterFeedForward += 1
@@ -391,29 +403,30 @@ class DenseWeightedLayer extends WeightedLayer {
     else
       split = Network.OutputLayer
 
-    val x = Array.fill(split)(activations).flatten
-    val w1 = CostManager.dotProduct(weights, x)
-    //split the array to be sent to layer +1 UCs
-    val splittedLayerDim = arraySize
-    val w2 = w1.grouped(w1.size / splittedLayerDim).toArray
-    weighted(correlationId) = w1
+    tsTest = controlPoints.indices.map (
+      i => controlPoints(i).indices.map {
+        j =>
+          val x = activations(i)
+          ActivationManager.ComputeZ(Network.getActivationLayersType(layer), x)  * BSpline.compute(controlPoints(i)(j),k,x,knots).toFloat
+      }.toArray
+    ).toArray
+
+    //sum the same index
+    val ts2 =   tsTest.transpose.map(_.sum)
+    val data = DenseVector(ts2)
+    val normalizedData = normalize(data).toArray
     val callersize = Network.getHiddenLayersDim(layer, "weighted")
 
     if (!LayerManager.IsLast(nextLayer)) {
       for (i: Int <- 0 until arraySize) {
-        val arr = w2(i)
-        val l = activations.length
-        val weighted = arr.grouped(activations.size).toArray.map(_.sum)
         val actorHiddenLayer = Network.LayersHiddenRef("hiddenLayer_" + nextLayer + "_" + i)
-        actorHiddenLayer ! ComputeActivation.FeedForwardTest( correlationId,  weighted, i, nextLayer, callersize)
+        actorHiddenLayer ! ComputeActivation.FeedForwardTest( correlationId,  normalizedData, i, nextLayer, callersize)
       }
     }
     else if (LayerManager.IsLast(nextLayer)) {
       for (i <- 0 until arraySize) {
-        val arr = w2(i)
-        val weighted = arr.grouped(activations.size).toArray.map(_.sum)
         val actorOutputLayer = Network.LayersOutputRef("outputLayer_" + i)
-        actorOutputLayer ! ComputeOutput.FeedForwardTest(correlationId, weighted, i, nextLayer, callersize)
+        actorOutputLayer ! ComputeOutput.FeedForwardTest(correlationId, normalizedData, i, nextLayer, callersize)
       }
     }
 
@@ -421,7 +434,7 @@ class DenseWeightedLayer extends WeightedLayer {
     weighted -= correlationId
     minibatch -= correlationId
 
-    w2
+    null
   }
   override def getNeighbor(localIndex:Int): Array[Float] = {
     null

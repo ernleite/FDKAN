@@ -60,8 +60,8 @@ class Output(context: ActorContext[ComputeOutput.OutputCommand]) extends Abstrac
         }
 
         if (!bInitialized) {
-          bias = Array.ofDim(LayerManager.GetOutputLayerStep())
-          bias = generateRandomBiasFloat(LayerManager.GetOutputLayerStep())
+          //bias = Array.ofDim(LayerManager.GetOutputLayerStep())
+          //bias = generateRandomBiasFloat(LayerManager.GetOutputLayerStep())
           bInitialized = true
           parameters += ("min" -> "0")
           parameters += ("max" -> "0")
@@ -80,10 +80,10 @@ class Output(context: ActorContext[ComputeOutput.OutputCommand]) extends Abstrac
           weighted_tmp = Array.ofDim(LayerManager.GetOutputLayerStep())
           z_tmp = Array.ofDim(LayerManager.GetOutputLayerStep())
           nabla_b_tmp = Array.ofDim(LayerManager.GetOutputLayerStep())
-          weightedMin += (correlationId -> 0f)
-          weightedMax += (correlationId -> 0f)
+          //weightedMin += (correlationId -> 0f)
+          //weightedMax += (correlationId -> 0f)
           activation += (correlationId -> activation_tmp)
-          z += (correlationId -> z_tmp)
+          //z += (correlationId -> z_tmp)
           weighted += (correlationId -> weighted_tmp)
           nablas_b += (correlationId -> nabla_b_tmp)
           nabla_b = Array.ofDim(LayerManager.GetOutputLayerStep())
@@ -117,38 +117,17 @@ class Output(context: ActorContext[ComputeOutput.OutputCommand]) extends Abstrac
         //all received. Lets compute the activation function
         if (shards == shardReceived(correlationId) && inProgress(correlationId)) {
           counterTraining +=1
-
-         // weighted(correlationId) = CostManager.scalling(weighted(correlationId), Network.OutputLayerDim, weightedMin(correlationId), weightedMax(correlationId))
-
-          val z = CostManager.sum2(weighted(correlationId), bias)
-          activation(correlationId) = ActivationManager.ComputeZ(Network.OutputActivationType, z)
-
-          //val mav = Normalisation.getMeanAndVariance(activation(correlationId))
-          //activation(correlationId) = Normalisation.batchNormalize(activation(correlationId), mav._1, mav._3, gamma, beta)
-
-          if (Network.NaN) {
-            activation(correlationId) = CostManager.EliminateNaN(activation(correlationId))
-          }
+          this.activation(correlationId) = weighted(correlationId)
 
           if (counterTraining % Network.minibatchBuffer == 0) {
             for (j <- activation(correlationId).indices) {
-              context.log.info("Output Layer: " + activation(correlationId)(j))
+              context.log.info("Output Layer: " + this.activation(correlationId)(j))
             }
             context.log.info("Params : " + parameters("min") + " " + parameters("max"))
             context.log.info("--------------------------------------------------------------------")
           }
 
-
-          if (Network.CheckNaN) {
-            val nanIndices = activation(correlationId).zipWithIndex.filter { case (value, _) => value.isNaN || value == 0f }
-            // Check if there are any NaN values
-            if (nanIndices.nonEmpty) {
-              println("NaN values found at indices:")
-              nanIndices.foreach { case (_, index) => println(index) }
-            } else {
-              println("No NaN values found in the array.")
-            }
-          }
+         // weighted(correlationId) = CostManager.scalling(weighted(correlationId), Network.OutputLayerDim, weightedMin(correlationId), weightedMax(correlationId))
 
           inProgress(correlationId) = false
           shardReceived(correlationId) = 0
@@ -203,14 +182,10 @@ class Output(context: ActorContext[ComputeOutput.OutputCommand]) extends Abstrac
           val predictions = activation.values.toArray.flatten.grouped(Network.OutputLayer).toArray
           val cost = CostManager.categoricalCrossEntropy2(trueLabs,predictions)
           mse = mse :+ cost
-          val flatten = nablas_b.values.toArray.flatten
-          val reduce = flatten.grouped(delta.length).toArray.transpose.map(_.sum)
           /*
             self.biases = [b-(eta/len(mini_batch))*nb
                           for b, nb in zip(self.biases, nabla_b)]
            */
-          val tmp2 = CostManager.matMulScalar(learningRate / Network.MiniBatch, reduce)
-          bias = CostManager.minus(this.bias, tmp2)
           parameterSended = false
           parameters("min") = "0"
           parameters("max") =  "0"
@@ -254,7 +229,6 @@ class Output(context: ActorContext[ComputeOutput.OutputCommand]) extends Abstrac
           z_tmp = Array.ofDim(LayerManager.GetOutputLayerStep())
 
           activation += (correlationId -> activation_tmp)
-          z += (correlationId -> z_tmp)
           weighted += (correlationId -> weighted_tmp)
         }
 
@@ -270,16 +244,10 @@ class Output(context: ActorContext[ComputeOutput.OutputCommand]) extends Abstrac
 
         //all received. Lets compute the activation function
         if (shards == shardReceived(correlationId) && inProgress(correlationId)) {
-          val z = CostManager.sum2(weighted(correlationId), bias)
-          //val mav = Normalisation.getMeanAndVariance(z)
-          //activation(correlationId) = Normalisation.batchNormalize(activation(correlationId), mav._1, mav._3, 0.1f, 0.1f)
-          activation(correlationId) = ActivationManager.ComputeZ(Network.OutputActivationType, z)
 
-          if (Network.NaN) {
-            activation(correlationId) = CostManager.EliminateNaN(activation(correlationId))
-          }
           inProgress(correlationId) = false
           shardReceived(correlationId) = 0
+          this.activation(correlationId) = weighted(correlationId)
 
           val maxlabel =  activation(correlationId).maxBy(t => t.self)
           val label =  activation(correlationId).indexOf(maxlabel)

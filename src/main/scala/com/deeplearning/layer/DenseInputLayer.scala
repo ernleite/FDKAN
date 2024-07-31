@@ -2,10 +2,11 @@ package com.deeplearning.layer
 
 import breeze.linalg.{DenseMatrix, DenseVector, linspace, normalize}
 import breeze.plot.{Figure, plot, scatter}
+import com.deeplearning.CostManager.dotProduct6
 import com.deeplearning.Network.{generateRandomBiasFloat, generateRandomFloat}
 import com.deeplearning.bspline.{BSpline, BSplineFigure, ControlPointUpdater, KnotPoints}
 import com.deeplearning.bspline.KANControlPoints.initializeControlPoints2D
-import com.deeplearning.{ActivationManager, ComputeActivation, CostManager, Network}
+import com.deeplearning.{ActivationManager, ComputeActivation, CostManager, LayerManager, Network}
 import com.deeplearning.samples.{CifarData, MnistData, TrainingDataSet}
 
 import java.time.Instant
@@ -17,7 +18,8 @@ class DenseInputLayer extends InputLayer {
   var k = 3 //degree of the spline
   var c = k + 1
   var controlPoints :Array[Array[DenseMatrix[Double]]]= _
-  var ts :Array[Array[Float]]= _
+  var ts = scala.collection.mutable.HashMap.empty[String,Array[Array[Float]]]
+  var tsTest : Array[Array[Float]] = null
   var ws = Array[Float]()
   var wb = Array[Float]()
   var inputSize = 0
@@ -36,6 +38,8 @@ class DenseInputLayer extends InputLayer {
       counterBackPropagation = 0
       counterFeedForward = 0
       lastEpoch = epoch
+      if (internalSubLayer==0)
+        BSplineFigure.draw(controlPoints(0)(0),knots,k,epoch,layer,internalSubLayer)
     }
     epochCounter = epoch
     counterTraining += 1
@@ -68,26 +72,23 @@ class DenseInputLayer extends InputLayer {
       val x = input.slice(startIndex + 2, endIndex + 2) //normalisation
       val v = CostManager.divide(x, 255)
       this.X += (correlationId -> v)
+      this.ts += (correlationId -> null)
     }
 
-    ts = controlPoints.indices.map (
+    ts(correlationId) = controlPoints.indices.map (
       i => controlPoints(i).indices.map {
         j =>
           val x = this.X(correlationId)(i)
-          wb(j) * ActivationManager.ComputeZ(Network.getActivationLayersType(layer), x) + ws(j) * BSpline.compute(controlPoints(i)(j),k,x,knots).toFloat
+          val spline = BSpline.compute(controlPoints(i)(j),k,x,knots).toFloat
+          val act = ActivationManager.ComputeZ(Network.getActivationLayersType(layer), x)
+          act +  spline
       }.toArray
     ).toArray
 
     //sum the same index
-    val ts2 = ts.transpose.map(_.sum)
+    val ts2 = ts(correlationId).transpose.map(_.sum)
     val data = DenseVector(ts2)
     val normalizedData = normalize(data).toArray
-
-  //  BSplineFigure.draw(controlPoints(0)(0),knots,k,epoch, layer,internalSubLayer)
-
-    //split the array to be sent to layer +1 UCs
-    //val splittedLayerDim = Network.HiddenLayersDim(layer)
-    //val w2 = w1.grouped(w1.size/splittedLayerDim).toArray
 
     if (!parameterSended) {
     //  parameters("min") = weights.min.toString
@@ -113,11 +114,37 @@ class DenseInputLayer extends InputLayer {
       //nablas_w(correlationId) = Array.ofDim(fromArraySize)
     }
     var startedAt = Instant.now
-    if (nablas_w_tmp.isEmpty)
-      nablas_w_tmp =  CostManager.dotProduct3(delta.length, delta, X(correlationId)).flatten
-    else
-      nablas_w_tmp = CostManager.sum2(nablas_w_tmp, CostManager.dotProduct3(delta.length, delta, X(correlationId)).flatten)
-    //nablas_w(correlationId) =CostManager.dotProduct3(delta.length, delta, X(correlationId)).flatten
+    if (nablas_w_tmp.isEmpty) {
+      val tt = controlPoints.indices.map (
+        i => controlPoints(i).indices.map {
+          val x = this.X(correlationId)
+          val siluPrime = ActivationManager.ComputePrime(Network.getActivationLayersType(1), x)
+          j =>
+            val splinePrime = BSpline.bsplineDerivative(ts(correlationId)(i)(j), controlPoints(i)(j),knots,k)
+            val finald = siluPrime(j) + splinePrime.toFloat
+            finald
+        }.toArray
+      ).toArray
+      var ttt2 = CostManager.matMul(tt.transpose, delta)
+      val norm = normalize(DenseVector(ttt2))
+      nablas_w_tmp = norm.toArray
+
+    }
+    else {
+      val tt = controlPoints.indices.map (
+        i => controlPoints(i).indices.map {
+          val x = this.X(correlationId)
+          val siluPrime = ActivationManager.ComputePrime(Network.getActivationLayersType(1), x)
+          j =>
+            val splinePrime = BSpline.bsplineDerivative(ts(correlationId)(i)(j), controlPoints(i)(j),knots,k)
+            val finald = siluPrime(j) + splinePrime.toFloat
+            finald
+        }.toArray
+      ).toArray
+      var ttt2 = CostManager.matMul(tt.transpose, delta)
+      val norm = normalize(DenseVector(ttt2))
+      nablas_w_tmp = CostManager.sum2(nablas_w_tmp,norm.toArray )
+    }
     //////////////////////////nablas_w(correlationId)(fromInternalSubLayer) = dot
     // how many calls would we received
     val callerSize = Network.getHiddenLayersDim(1, "hidden")
@@ -130,29 +157,29 @@ class DenseInputLayer extends InputLayer {
       parameterSended = false
       params("min") = "0"
       params("max") = "0"
+      val size = LayerManager.GetInputLayerStep()
 
-      /*
-      val flatten = nablas_w.values.toArray
-      val reduce = flatten.transpose.map(_.sum)
-      val nablaflaten = reduce
+      val tmp1 = CostManager.matMulScalar(1 - learningRate * (regularisation / nInputs), this.ts(correlationId).flatten)
+      val tmp2 = CostManager.matMulScalar(learningRate / Network.MiniBatch,nablas_w_tmp)
+      val tmp3 = tmp1.grouped(inputSize).toArray
+      val tmp4 = CostManager.minus2(tmp3, tmp2)
+      val tmp5 = CostManager.divide(tmp4, tmp4.length)
 
-       */
-      val reduce = nablas_w_tmp.grouped(inputSize).map(_.sum).toArray
-      val tmp2 = CostManager.matMulScalar(learningRate / Network.MiniBatch,reduce)
-      val tmp1 = CostManager.matMulScalar(1 - learningRate * (regularisation / nInputs), this.ts.flatten)
-      val diff = CostManager.minus2(tmp1, tmp2).grouped(inputSize).map(_.sum).toArray
 
-      val tess = ts
-      val ttt = ts.zipWithIndex.map {
+      //println("Before : Input " +  controlPoints(0)(0).toArray(4) + " "  + controlPoints(0)(0).toArray(5)+ " "  + controlPoints(0)(0).toArray(6)+ " "  + controlPoints(0)(0).toArray(7))
+      val ttt = ts(correlationId).zipWithIndex.map {
         case (element, i) =>
           element.zipWithIndex.map {
             case (subelement, j) => {
-              val test = controlPoints(i)(j)
-              controlPoints(i)(j) = ControlPointUpdater.updateControlPoints(ts(i)(j), knots, controlPoints(i)(j).toDenseVector, k, diff(j)).toDenseMatrix
-              val test2 = controlPoints(i)(j)
+              if (i==0 && j==0) println("Before : " + controlPoints(i)(j))
+              controlPoints(i)(j) = ControlPointUpdater.updateControlPoints(ts(correlationId)(i)(j), knots, controlPoints(i)(j), k, tmp5(i+j)).toDenseMatrix
+              if (i==0 && j==0)  println("After : " + controlPoints(i)(j))
             }
           }
       }
+
+    // println("After : Input " + controlPoints(0)(0).toArray(4) + " "  + controlPoints(0)(0).toArray(5)+ " "  + controlPoints(0)(0).toArray(6)+ " "  + controlPoints(0)(0).toArray(7))
+
 
      // weights =  updated
 //      weights = CostManager.minus2(tmp1, tmp2)
@@ -162,7 +189,7 @@ class DenseInputLayer extends InputLayer {
 
       //println("---------------------------------------------------------------")
       //println("Back-propagation event IL (0): Weights updated")
-
+      this.ts -= (correlationId)
       backPropagateReceived.clear()
       minibatch.clear()
       weighted.clear()
@@ -196,22 +223,27 @@ class DenseInputLayer extends InputLayer {
       wTest = true
     }
 
-    val x = Array.fill(Network.getHiddenLayers(1, "hidden"))(this.XTest(correlationId)).flatten
-    val w1 = CostManager.dotProduct(weights, x)
-    //split the array to be sent to layer +1 UCs
-    val splittedLayerDim = Network.HiddenLayersDim(layer)
-    val w2 = w1.grouped(w1.size / splittedLayerDim).toArray
+    tsTest = controlPoints.indices.map (
+      i => controlPoints(i).indices.map {
+        j =>
+          val x = this.XTest(correlationId)(i)
+          ActivationManager.ComputeZ(Network.getActivationLayersType(layer), x) + BSpline.compute(controlPoints(i)(j),k,x,knots).toFloat
+      }.toArray
+    ).toArray
+
+    //sum the same index
+    val ts2 = tsTest.transpose.map(_.sum)
+    val data = DenseVector(ts2)
+    val normalizedData = normalize(data).toArray
+
     for (i: Int <- 0 until Network.getHiddenLayersDim(nextLayer, "hidden")) {
-      val arr = w2(i)
-      val l = this.XTest(correlationId).length
-      val weighted = arr.grouped(l).toArray.map(_.sum)
       val actorHiddenLayer = Network.LayersHiddenRef("hiddenLayer_" + nextLayer + "_" + i)
-      actorHiddenLayer ! ComputeActivation.FeedForwardTest(correlationId, weighted, i, nextLayer, Network.InputLayerDim)
+      actorHiddenLayer ! ComputeActivation.FeedForwardTest(correlationId, normalizedData, i, nextLayer, Network.InputLayerDim)
     }
 
     weighted -= (correlationId)
     minibatch -= (correlationId)
     XTest -= (correlationId)
-    w2
+    null
   }
 }

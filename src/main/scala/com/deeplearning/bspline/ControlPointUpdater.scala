@@ -6,11 +6,11 @@ object ControlPointUpdater {
   def updateControlPoints(
                            x: Double,
                            knots: DenseVector[Double],
-                           controlPoints: DenseVector[Double],
+                           controlPoints: DenseMatrix[Double],
                            degree: Int,
                            delta: Double
-                         ): DenseVector[Double] = {
-    val numPoints = controlPoints.length / 2
+                         ): DenseMatrix[Double] = {
+    val numPoints = controlPoints.rows
     require(knots.length >= numPoints + degree + 1,
       "Number of knots must be at least number of control points plus degree plus 1")
 
@@ -25,24 +25,13 @@ object ControlPointUpdater {
     val endIndex = math.min(startIndex + degree + 1, numPoints)
 
     val closestPointIndex = (startIndex until endIndex).minBy(i =>
-      math.abs(controlPoints(i) - x)
+      math.abs(controlPoints(i, 0) - x)
     )
 
     // Update only the closest control point's y-coordinate
     val updatedControlPoints = controlPoints.copy
-    updatedControlPoints(numPoints + closestPointIndex) -= delta
-
+    updatedControlPoints(closestPointIndex, 1) -= delta
     updatedControlPoints
-  }
-
-  def printUpdatedControlPoints(x: Double, knots: DenseVector[Double], controlPoints: DenseVector[Double], degree: Int, delta: Double): Unit = {
-    val updatedPoints = updateControlPoints(x, knots, controlPoints, degree, delta)
-    val numPoints = updatedPoints.length / 2
-    println(s"For x = $x:")
-    for (i <- 0 until numPoints) {
-      println(s"Control point $i: (${updatedPoints(i)}, ${updatedPoints(numPoints + i)})")
-    }
-    println()
   }
 }
 

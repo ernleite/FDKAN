@@ -15,7 +15,7 @@ object Network {
   val InputLayerType = "Dense"
   val InputActivationType = "SiLu"
   val InputLayer = 784 // 784 Mnist or 3072 Cifar
-  val InputLayerDim = 1// Vertical split
+  val InputLayerDim = 8// Vertical split
 
   val HiddenLayers = Array[Int](20) // Neurons size
   val HiddenLayersDim = Array[Int](1) // Vertical split : Disabled for the moment not working sufficiently. Waiting for KAN implementation instead
@@ -30,20 +30,20 @@ object Network {
   val OutputActivationType = "SoftMax"
 
   val CostFunction = "CategoricalCrossEntropy"
-  var LearningRate:Float =  0.01f
+  var LearningRate:Float =  0.0125f
   val weightedPenalty = 0.05f
   var InitialLearningRate:Float = LearningRate
   var Regularisation:Float = 5f
-  val Epochs = 10
+  val Epochs = 5
   var MiniBatch:Int = 1
-  val MiniBatchRange:Int = 60000 // Mnist 60000 or Cifar 45000
-  val minibatchBuffer = 10000 // <= MiniBatchRange
+  val MiniBatchRange:Int = 20000 // Mnist 60000 or Cifar 45000
+  val minibatchBuffer = 20000 // <= MiniBatchRange
   var rangeInitAuto:Boolean = true
   var rangeInitStart:Float = -1f
   var rangeInitEnd:Float = 1f
   var scaleInitStart: Float = -1f
   var scaleInitEnd: Float = 1f
-  var LeakyReluAlpha:Float = 0.01f
+  var LeakyReluAlpha:Float = 0.1f
   var NaN:Boolean = false
   var CheckNaN:Boolean = false
   var dropout:Float = 0.8f//-1 Dropout desactivated

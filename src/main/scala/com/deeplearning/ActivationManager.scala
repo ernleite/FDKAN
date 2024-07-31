@@ -1,7 +1,8 @@
 package com.deeplearning
 
 import breeze.linalg.{DenseMatrix, DenseVector, InjectNumericOps, max}
-import breeze.numerics.{sigmoid, tanh}
+import breeze.math.Field.fieldFloat
+import breeze.numerics.{exp, sigmoid, tanh}
 import com.deeplearning.CostManager.dotProduct
 
 object ActivationManager {
@@ -68,9 +69,16 @@ object ActivationManager {
         val arr = dotProduct(sigmoid(z),mat.toArray)
         arr
       case "SiLu"  =>
-        val mat = (1.0f - DenseMatrix(sigmoid(z)))
-        val arr = dotProduct(z*sigmoid(z),mat.toArray)
-        arr
+        val silu = DenseVector.zeros[Float](z.length)
+        val derivative = DenseVector.zeros[Float](z.length)
+
+        for (i <- 0 until z.length) {
+          val x = z(i)
+          val sigmoid = 1.0f / (1.0f + exp(-x).toFloat)
+          silu(i) = x * sigmoid
+          derivative(i) = silu(i) + sigmoid * (1.0f - silu(i))
+        }
+        derivative.toArray
       case "Tanh" =>
         val tanhX = tanh(new DenseVector(z)).toArray
         (1.0f - DenseMatrix(dotProduct(tanhX, tanhX))).toArray

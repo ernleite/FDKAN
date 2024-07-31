@@ -1,9 +1,6 @@
 package com.deeplearning.bspline
 
 import breeze.linalg._
-import breeze.numerics._
-import breeze.plot._
-
 object BSpline {
     def bsplineBasis(i: Int, k: Int, t: Double, knots: DenseVector[Double]): Double = {
       if (k == 1) {
@@ -19,6 +16,29 @@ object BSpline {
       }
     }
 
+    def bsplineBasisDerivative(i: Int, k: Int, t: Double, knots: DenseVector[Double]): Double = {
+      if (k == 1) {
+        0.0
+      } else {
+        val d1 = if (knots(i + k - 1) - knots(i) == 0) 0.0
+        else (k - 1) / (knots(i + k - 1) - knots(i)) * bsplineBasis(i, k - 1, t, knots)
+        val d2 = if (knots(i + k) - knots(i + 1) == 0) 0.0
+        else (k - 1) / (knots(i + k) - knots(i + 1)) * bsplineBasis(i + 1, k - 1, t, knots)
+        d1 - d2
+      }
+    }
+
+    def bsplineDerivative(t: Double, controlPoints: DenseMatrix[Double], knots: DenseVector[Double], k: Int): Double = {
+      val n = controlPoints.rows
+      val d = controlPoints.cols
+      val result = DenseVector.zeros[Double](d)
+      for (i <- 0 until n) {
+        val basis = bsplineBasisDerivative(i, k, t, knots)
+        result += controlPoints(i, ::).t * basis
+      }
+      result(1)
+    }
+
     def bspline(t: Double, controlPoints: DenseMatrix[Double], knots: DenseVector[Double], k: Int): DenseVector[Double] = {
       val n = controlPoints.rows
       val d = controlPoints.cols
@@ -31,7 +51,8 @@ object BSpline {
     }
 
     def compute(controlPoints: DenseMatrix[Double], k: Int, x: Double, knots: DenseVector[Double]): Double = {
-      bspline(x, controlPoints, knots, k)(0)
+      val t = bspline(x, controlPoints, knots, k)(1)
+      t
     }
 
   def findSpan(x: Double, degree: Int, c: Int, knots: Array[Double]): Int = {
