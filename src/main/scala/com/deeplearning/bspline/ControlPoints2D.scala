@@ -8,9 +8,9 @@ import com.deeplearning.Network
 import scala.util.Random
 
 object KANControlPoints {
-  val rangeMin = -10.0
-  val rangeMax = 10.0
-  
+  val rangeMin = -1.0
+  val rangeMax = 1.0
+
   def initializeControlPoints2D(numPoints: Int = 4, minX: Double = 0.0, maxX: Double = 1.0, minY: Double = 0.0, maxY: Double = 1.0): DenseMatrix[Double] = {
     require(numPoints >= 2, "Number of points must be at least 2")
 

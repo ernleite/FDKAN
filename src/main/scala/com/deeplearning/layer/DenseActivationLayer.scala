@@ -39,6 +39,7 @@ class DenseActivationLayer extends ActivationLayer {
       messagePropagateReceived += (correlationId -> 0)
       weightedMin += (correlationId -> 0f)
       weightedMax += (correlationId -> 0f)
+      this.activation += (correlationId -> Array.fill(shardedWeighted.length)(0.0f))
     }
 
     if (!inProgress.contains(correlationId)) {

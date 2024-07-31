@@ -98,7 +98,7 @@ class DenseInputLayer extends InputLayer {
 
     for (i: Int <- 0 until Network.getHiddenLayersDim(nextLayer, "hidden")) {
       val actorHiddenLayer = Network.LayersHiddenRef("hiddenLayer_" + nextLayer + "_" + i)
-      actorHiddenLayer ! ComputeActivation.ComputeZ(epoch, correlationId, yLabel, Network.MiniBatchRange, normalizedData, i, nextLayer, Network.InputLayerDim, params, Array.empty[Float])
+      actorHiddenLayer ! ComputeActivation.ComputeZ(epoch, correlationId, yLabel, Network.MiniBatchRange, ts2, i, nextLayer, Network.InputLayerDim, params, Array.empty[Float])
     }
     null
   }
@@ -127,7 +127,7 @@ class DenseInputLayer extends InputLayer {
       ).toArray
       var ttt2 = CostManager.matMul(tt.transpose, delta)
       val norm = normalize(DenseVector(ttt2))
-      nablas_w_tmp = norm.toArray
+      nablas_w_tmp = CostManager.matMul(tt.transpose, delta)
 
     }
     else {
@@ -143,7 +143,7 @@ class DenseInputLayer extends InputLayer {
       ).toArray
       var ttt2 = CostManager.matMul(tt.transpose, delta)
       val norm = normalize(DenseVector(ttt2))
-      nablas_w_tmp = CostManager.sum2(nablas_w_tmp,norm.toArray )
+      nablas_w_tmp = CostManager.sum2(nablas_w_tmp,CostManager.matMul(tt.transpose, delta) )
     }
     //////////////////////////nablas_w(correlationId)(fromInternalSubLayer) = dot
     // how many calls would we received
