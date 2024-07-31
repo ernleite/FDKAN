@@ -178,17 +178,6 @@ class DenseInputLayer extends InputLayer {
           }
       }
 
-    // println("After : Input " + controlPoints(0)(0).toArray(4) + " "  + controlPoints(0)(0).toArray(5)+ " "  + controlPoints(0)(0).toArray(6)+ " "  + controlPoints(0)(0).toArray(7))
-
-
-     // weights =  updated
-//      weights = CostManager.minus2(tmp1, tmp2)
-
-      //val scalling = CostManager.scalling(weights, Network.InputLayerDim, parameters("weighted_min").toFloat, parameters("weighted_min").toFloat)
-      //weights = scalling
-
-      //println("---------------------------------------------------------------")
-      //println("Back-propagation event IL (0): Weights updated")
       this.ts -= (correlationId)
       backPropagateReceived.clear()
       minibatch.clear()

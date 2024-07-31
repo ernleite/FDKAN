@@ -90,7 +90,7 @@ class DenseWeightedLayer extends WeightedLayer {
       this.minibatch += (correlationId -> 0)
       this.messagePropagateReceived += (correlationId -> 0)
       this.fromInternalReceived += (correlationId -> 0)
-      this.activation += (correlationId -> activations)
+      this.activation += (correlationId -> Array.fill(activationsLength)(0.0f))
       this.deltas = Array.fill(activationsLength)(0f)
       this.ts += (correlationId -> null)
     }

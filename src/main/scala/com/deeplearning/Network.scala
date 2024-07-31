@@ -17,7 +17,7 @@ object Network {
   val InputLayer = 784 // 784 Mnist or 3072 Cifar
   val InputLayerDim = 8// Vertical split
 
-  val HiddenLayers = Array[Int](64) // Neurons size
+  val HiddenLayers = Array[Int](30) // Neurons size
   val HiddenLayersDim = Array[Int](1) // Vertical split : Disabled for the moment not working sufficiently. Waiting for KAN implementation instead
   val HiddenLayerType = Array[String](   "Dense") // Dense or Conv2D
   val HiddenActivationType = Array[String]("SiLu") // Sigmoid, Relu, TanH, LeakyRelu
