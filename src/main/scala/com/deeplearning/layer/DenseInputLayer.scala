@@ -171,9 +171,9 @@ class DenseInputLayer extends InputLayer {
         case (element, i) =>
           element.zipWithIndex.map {
             case (subelement, j) => {
-              if (i==0 && j==0) println("Before : " + controlPoints(i)(j))
+              //if (i==0 && j==0) println("Before : " + controlPoints(i)(j))
               controlPoints(i)(j) = ControlPointUpdater.updateControlPoints(ts(correlationId)(i)(j), knots, controlPoints(i)(j), k, tmp5(i+j)).toDenseMatrix
-              if (i==0 && j==0)  println("After : " + controlPoints(i)(j))
+              //if (i==0 && j==0)  println("After : " + controlPoints(i)(j))
             }
           }
       }
