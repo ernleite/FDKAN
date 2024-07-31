@@ -115,11 +115,14 @@ class DenseWeightedLayer extends WeightedLayer {
           j =>
             val x = activation(correlationId)(i)
             val y = ActivationManager.ComputeZ(Network.getActivationLayersType(layer), x) + BSpline.compute(controlPoints(i)(j),k,x,knots).toFloat
+            /*
             if (y>1.0f) {
               println("-----------------------------------------")
               println("Threshold " + y )
               println("-----------------------------------------")
             }
+
+             */
             y
         }.toArray
       ).toArray
