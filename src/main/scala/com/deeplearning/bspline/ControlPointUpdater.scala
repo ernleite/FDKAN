@@ -20,17 +20,20 @@ object ControlPointUpdater {
       case None => knots.length - degree - 2
     }
 
-    // Find the closest control point within the relevant span
-    val startIndex = math.max(0, knotSpanIndex - degree)
-    val endIndex = math.min(startIndex + degree + 1, numPoints)
-
-    val closestPointIndex = (startIndex until endIndex).minBy(i =>
-      math.abs(controlPoints(i, 0) - x)
-    )
+    val knotSpanValue = knots(knotSpanIndex)
 
     // Update only the closest control point's y-coordinate
     val updatedControlPoints = controlPoints.copy
-    updatedControlPoints(closestPointIndex, 1) -= delta
+    val numrows = updatedControlPoints.rows
+
+    var verif = false
+    for (i <-0 until numrows) {
+      if (controlPoints(i,0)>=knotSpanValue && verif == false)  {
+        updatedControlPoints(i,1) = delta
+        verif = true
+      }
+    }
+
     updatedControlPoints
   }
 }

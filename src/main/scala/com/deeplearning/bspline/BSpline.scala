@@ -21,22 +21,21 @@ object BSpline {
         0.0
       } else {
         val d1 = if (knots(i + k - 1) - knots(i) == 0) 0.0
-        else (k - 1) / (knots(i + k - 1) - knots(i)) * bsplineBasis(i, k - 1, t, knots)
+        else k.toDouble / (knots(i + k - 1) - knots(i))
         val d2 = if (knots(i + k) - knots(i + 1) == 0) 0.0
-        else (k - 1) / (knots(i + k) - knots(i + 1)) * bsplineBasis(i + 1, k - 1, t, knots)
-        d1 - d2
+        else k.toDouble / (knots(i + k) - knots(i + 1))
+        d1 * bsplineBasis(i, k - 1, t, knots) - d2 * bsplineBasis(i + 1, k - 1, t, knots)
       }
     }
 
-    def bsplineDerivative(t: Double, controlPoints: DenseMatrix[Double], knots: DenseVector[Double], k: Int): Double = {
-      val n = controlPoints.rows
-      val d = controlPoints.cols
-      val result = DenseVector.zeros[Double](d)
+    def bsplineDerivative(t: Double, controlPoints: DenseVector[Double], knots: DenseVector[Double], k: Int): Double = {
+      val n = controlPoints.length/2
+      var result = 0.0
       for (i <- 0 until n) {
-        val basis = bsplineBasisDerivative(i, k, t, knots)
-        result += controlPoints(i, ::).t * basis
+        val basisDerivative = bsplineBasisDerivative(i, k, t, knots)
+        result += controlPoints(i) * basisDerivative
       }
-      result(1)
+      result
     }
 
     def bspline(t: Double, controlPoints: DenseMatrix[Double], knots: DenseVector[Double], k: Int): DenseVector[Double] = {
@@ -66,5 +65,22 @@ object BSpline {
       mid = (low + high) / 2
     }
     mid
+  }
+
+  def leastSquares(A: DenseMatrix[Double], B: DenseVector[Double]): DenseVector[Double] = {
+    // Compute the QR decomposition of A
+    val qrResult = qr(A)
+
+    // Extract Q and R matrices
+    val Q = qrResult.q
+    val R = qrResult.r
+
+    // Compute Q^T * B
+    val QtB = Q.t * B
+
+    // Solve R * X = Q^T * B for X
+    val X = R \ QtB
+
+    X
   }
 }

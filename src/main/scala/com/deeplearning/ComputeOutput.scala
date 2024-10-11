@@ -3,15 +3,11 @@ package com.deeplearning
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors}
-import breeze.linalg.DenseVector
-import com.deeplearning.ComputeEpochs.{SetStats, TrainCommand}
-import com.deeplearning.CostManager.dotProduct3
-import com.deeplearning.Network.{Epochs, generateRandomBiasFloat}
+import breeze.linalg.{DenseVector, normalize}
+import com.deeplearning.ComputeEpochs.SetStats
+import com.deeplearning.CostManager.{normalize2, scaleToRange}
 
 import java.time.{Duration, Instant}
-import scala.collection.immutable.HashMap
-import scala.util.Random
-
 
 class Output(context: ActorContext[ComputeOutput.OutputCommand]) extends AbstractBehavior[ComputeOutput.OutputCommand](context) {
   import ComputeOutput._
@@ -94,20 +90,6 @@ class Output(context: ActorContext[ComputeOutput.OutputCommand]) extends Abstrac
           shardReceived += (correlationId -> 0)
         }
 
-        /*
-        val minIn = parameters("min").toFloat
-        val maxIn = parameters("max").toFloat
-        val min = params("min").toFloat
-        val max = params("max").toFloat
-        if (min < minIn) parameters("min") = params("min")
-        if (max > maxIn) parameters("max") = params("max")
-        val minIn2 = weightedMin(correlationId)
-        val maxIn2 = weightedMax(correlationId)
-        val min2 = params("weighted_min").toFloat
-        val max2 = params("weighted_max").toFloat
-        if (min2 < minIn2) weightedMin(correlationId) = params("weighted_min").toFloat
-        if (max2 > maxIn2) weightedMax(correlationId) = params("weighted_max").toFloat
-        */
         shardReceived(correlationId) += 1
 
         if (shardReceived(correlationId) <= shards) {
@@ -118,16 +100,18 @@ class Output(context: ActorContext[ComputeOutput.OutputCommand]) extends Abstrac
         if (shards == shardReceived(correlationId) && inProgress(correlationId)) {
           counterTraining +=1
           this.activation(correlationId) = weighted(correlationId)
+          activation(correlationId) = scaleToRange(activation(correlationId))
+          activation(correlationId) = ActivationManager.ComputeZ(Network.OutputActivationType, activation(correlationId))
 
           if (counterTraining % Network.minibatchBuffer == 0) {
+            context.log.info("--------------------------------------------------------------------")
+            context.log.info("Label src : " + yLabel)
+
             for (j <- activation(correlationId).indices) {
               context.log.info("Output Layer: " + this.activation(correlationId)(j))
             }
-            context.log.info("Params : " + parameters("min") + " " + parameters("max"))
             context.log.info("--------------------------------------------------------------------")
           }
-
-         // weighted(correlationId) = CostManager.scalling(weighted(correlationId), Network.OutputLayerDim, weightedMin(correlationId), weightedMax(correlationId))
 
           inProgress(correlationId) = false
           shardReceived(correlationId) = 0
@@ -146,8 +130,12 @@ class Output(context: ActorContext[ComputeOutput.OutputCommand]) extends Abstrac
       case ComputeLoss(correlationId: String, labels:Array[Float], trainingLabelsCount:Int, learningRate:Float, regularisation:Float, internalSubLayer:Int, params : scala.collection.mutable.HashMap[String,String]) =>
         //context.log.info(s"Label is : $searchedLabel in trainingSet ${trainingLabelsCount} for correlationId $correlationId")
         val delta = CostManager.Delta(labels,activation(correlationId))
-        if (Network.debug) {
-          debugDelta += (s"$counterBackPropagation" -> delta)
+        if (counterTraining % Network.minibatchBuffer == 9999) {
+          context.log.info("--------------------------------------------------------------------")
+          for (j <- delta.indices) {
+            context.log.info("Output Layer delta: " + delta(j))
+          }
+          context.log.info("--------------------------------------------------------------------")
         }
 
         //nablas_b += (correlationId->delta)
@@ -248,7 +236,9 @@ class Output(context: ActorContext[ComputeOutput.OutputCommand]) extends Abstrac
           inProgress(correlationId) = false
           shardReceived(correlationId) = 0
           this.activation(correlationId) = weighted(correlationId)
-
+          //activation(correlationId) = normalize2(weighted(correlationId))
+          //scaleToRange(activation(correlationId))
+          this.activation(correlationId) = scaleToRange(activation(correlationId))
           val maxlabel =  activation(correlationId).maxBy(t => t.self)
           val label =  activation(correlationId).indexOf(maxlabel)
 

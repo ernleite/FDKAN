@@ -15,9 +15,9 @@ object Network {
   val InputLayerType = "Dense"
   val InputActivationType = "SiLu"
   val InputLayer = 784 // 784 Mnist or 3072 Cifar
-  val InputLayerDim = 4 // Vertical split
+  val InputLayerDim = 1 // Vertical split
 
-  val HiddenLayers = Array[Int](60) // Neurons size
+  val HiddenLayers = Array[Int](10) // Neurons size
   val HiddenLayersDim = Array[Int](1) // Vertical split : Disabled for the moment not working sufficiently. Waiting for KAN implementation instead
   val HiddenLayerType = Array[String](   "Dense") // Dense or Conv2D
   val HiddenActivationType = Array[String]("SiLu") // Sigmoid, Relu, TanH, LeakyRelu
@@ -30,14 +30,14 @@ object Network {
   val OutputActivationType = "SoftMax"
 
   val CostFunction = "CategoricalCrossEntropy"
-  var LearningRate:Float =  0.0125f
+  var LearningRate:Float =  0.0008f
   val weightedPenalty = 0.05f
   var InitialLearningRate:Float = LearningRate
-  var Regularisation:Float = 5f
-  val Epochs = 15
-  var MiniBatch:Int = 1
-  val MiniBatchRange:Int = 2000 // Mnist 60000 or Cifar 45000
-  val minibatchBuffer = 1000 // <= MiniBatchRange
+  var Regularisation:Float = 1f
+  val Epochs = 10
+  var MiniBatch:Int = 30
+  val MiniBatchRange:Int = 938 // Mnist 60000 or Cifar 45000
+  val minibatchBuffer = 938 // <= MiniBatchRange
   var rangeInitAuto:Boolean = true
   var rangeInitStart:Float = -1f
   var rangeInitEnd:Float = 1f

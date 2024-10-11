@@ -6,6 +6,7 @@ import breeze.stats.distributions._
 import com.deeplearning.Network
 
 import scala.util.Random
+import scala.util.control.Breaks.break
 
 object KANControlPoints {
   val rangeMin = -1.0
@@ -25,11 +26,12 @@ object KANControlPoints {
 
     // Generate x-coordinates in ascending order
     val xCoords = DenseVector.zeros[Double](numPoints)
-    xCoords(0) = minX
-    xCoords(numPoints - 1) = maxX
+    xCoords(0) = rangeMin
+    xCoords(numPoints - 1) = rangeMax
     for (i <- 1 until numPoints - 1) {
       xCoords(i) =  random.between(rangeMin, rangeMax)
     }
+
     val sortedXCoords = DenseVector(xCoords.toArray.sorted)
 
     // Fill the matrix with the sorted x-coordinates and random y-coordinates
@@ -39,6 +41,52 @@ object KANControlPoints {
     }
 
     controlPoints
+  }
+
+  def findClosestValueIndex(matrix: DenseMatrix[Double], value: Double): Int = {
+    var closestIndex: Int = -1
+    var closestDifference: Double = Double.MaxValue
+
+    for (i <- 0 until matrix.rows) {
+      val currentValue = matrix(i, 0)  // Only look at the first column (index 0)
+      if (value > currentValue)
+          closestIndex = i
+      else
+        return closestIndex
+    }
+    closestIndex
+  }
+
+
+  def expand(controlPoints: DenseMatrix[Double], searchedValue:Double): DenseMatrix[Double] = {
+    val random = new Random()
+    val startIndex = findClosestValueIndex(controlPoints, searchedValue)
+    if (startIndex == 5) {
+      val test = 1
+    }
+
+    if (startIndex + 1 < controlPoints.rows) {
+      var value = 0.0
+      value =  random.between(controlPoints(startIndex,0), controlPoints(startIndex+1,0))
+
+      val value2 =  random.between(rangeMin, rangeMax)
+      val newRow = DenseVector(value, value2)
+      // Convert the new row to a DenseMatrix with a single row
+      val matrix = controlPoints
+      val updatedMatrix = DenseMatrix.zeros[Double](matrix.rows + 1, matrix.cols)
+      for (i <- 0 to startIndex) {
+        updatedMatrix(i, ::) := matrix(i, ::)
+      }
+
+      updatedMatrix(startIndex+1, ::) := newRow.t
+
+      for (i <- startIndex+1 until matrix.rows) {
+        updatedMatrix(i + 1, ::) := matrix(i, ::)
+      }
+      updatedMatrix
+    }
+    else
+      controlPoints
   }
 
   def main(args: Array[String]): Unit = {

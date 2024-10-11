@@ -1,10 +1,9 @@
 package com.deeplearning.layer
 
-import com.deeplearning.CostManager.{batchNormalize, dotProduct, normalize, softMax}
-import com.deeplearning.{ActivationManager, ComputeInputs, ComputeWeighted, CostManager, LayerManager, Network, Normalisation}
+import breeze.linalg.{DenseVector, normalize}
+import com.deeplearning.CostManager.{normalize2, scaleToRange}
+import com.deeplearning.{ComputeInputs, ComputeWeighted, CostManager, LayerManager, Network, Normalisation}
 import com.deeplearning.Network.generateRandomBiasFloat
-
-import java.time.{Duration, Instant}
 
 class DenseActivationLayer extends ActivationLayer {
   private val parameters = scala.collection.mutable.HashMap.empty[String,String]
@@ -75,19 +74,9 @@ class DenseActivationLayer extends ActivationLayer {
     //all received. Lets compute the activation function
     if (shards == shardReceived(correlationId) && inProgress(correlationId)) {
       this.activation(correlationId) = weighted(correlationId)
-
-      //val mav = Normalisation.getMeanAndVariance(activation(correlationId))
-      //activation(correlationId) = Normalisation.batchNormalize(activation(correlationId), mav._1, mav._3, this.gamma, this.beta)
-
-      val ttt = this.activation(correlationId)
-      if (counterTraining % Network.minibatchBuffer == 0 && Network.debug) {
-        for (j <- activation(correlationId).indices) {
-          println("Activation Layer ("+layer +"): " + activation(correlationId)(j) + " " + bias(j))
-        }
-        println("Params : " + parameters("min") + " " + parameters("max"))
-        println("--------------------------------------------------------------------")
-      }
-
+      activation(correlationId) = scaleToRange(activation(correlationId))
+      //activation(correlationId) = normalize2(weighted(correlationId))
+      //val ttt = CostManager.divide(this.activation(correlationId),this.activation(correlationId).length)
      //context.log.info(s"${Network.Activation(layer)} on ${layer} / ${internalSubLayer} with ${activation(correlationId).length} activations : Done !")
       inProgress(correlationId) = false
       shardReceived(correlationId) = 0
@@ -96,7 +85,7 @@ class DenseActivationLayer extends ActivationLayer {
       val uCs = Network.getHiddenLayersDim(layer+1, "weighted")
       for (i <- 0 until uCs) {
         val actorweightedLayer = Network.LayersIntermediateRef("weightedLayer_" + (layer+1) + "_" + i)
-        actorweightedLayer ! ComputeWeighted.Weights(epoch, correlationId, yLabel, trainingCount,  activation(correlationId),uCs, i, layer+1,params)
+        actorweightedLayer ! ComputeWeighted.Weights(epoch, correlationId, yLabel, trainingCount, this.activation(correlationId) ,uCs, i, layer+1,params)
       }
 
       activation(correlationId)
@@ -211,7 +200,7 @@ class DenseActivationLayer extends ActivationLayer {
     //all received. Lets compute the activation function
     if (shards == shardReceived(correlationId) && inProgress(correlationId)) {
       activation(correlationId) = weighted(correlationId)
-
+      activation(correlationId) = scaleToRange(activation(correlationId))
       inProgress(correlationId) = false
       shardReceived(correlationId) = 0
 

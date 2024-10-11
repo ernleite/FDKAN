@@ -75,8 +75,23 @@ object CostManager {
     manager.close()
     lossOutput(0)
   }
+  def scaleToRange(arr: Array[Float], targetMin: Float = -1f, targetMax: Float = 1f): Array[Float] = {
+    if (arr.isEmpty) return arr
 
-  def normalize(arr: Array[Float]): Array[Float] = {
+    val currentMin = arr.min
+    val currentMax = arr.max
+
+    // Check if all values are the same to avoid division by zero
+    if (currentMin == currentMax) {
+      return Array.fill(arr.length)(0f) // Map to the middle of the target range
+    }
+
+    arr.map { x =>
+      val scaled = (x - currentMin) / (currentMax - currentMin)
+      scaled * (targetMax - targetMin) + targetMin
+    }
+  }
+  def normalize2(arr: Array[Float]): Array[Float] = {
     val max = arr.max
     val min = arr.min
     arr.map(v => (v - min) / (max - min))

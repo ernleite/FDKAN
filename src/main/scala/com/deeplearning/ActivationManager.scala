@@ -23,7 +23,7 @@ object ActivationManager {
          */
         CostManager.softMax(z)
       case "SiLu" =>
-        z * sigmoid(new DenseVector(z)).toArray
+        z.map(xi => (xi / (1 + exp(-xi))))
       case "Sigmoid" =>
         sigmoid(new DenseVector(z)).toArray
       case "Tanh" =>
@@ -43,9 +43,29 @@ object ActivationManager {
       case "Tanh" => tanh(z)
       case "LeakyRelu" => max(z, z * Network.LeakyReluAlpha)
       case "SiLu" =>
-        z*sigmoid(z)
+        z / (1 + exp(-z))
       case "Sigmoid" =>
         sigmoid(z)
+    }
+  }
+
+  def ComputePrime(ActivationFunction: String, z: Float): Float = {
+    ActivationFunction match {
+      case "LeakyRelu" =>
+        if (z > 0.0) z else Network.LeakyReluAlpha
+      case "Relu" =>
+        if (z > 0) z else 0
+      case "Sigmoid" =>
+        val sigmoid = 1 / (1 + math.exp(-z).toFloat)
+        sigmoid * (1 - sigmoid)
+      case "SiLu" =>
+        val sigmoid = 1 / (1 + math.exp(-z).toFloat)
+        sigmoid + z * sigmoid * (1 - sigmoid)
+      case "Tanh" =>
+        val tanhX = math.tanh(z).toFloat
+        1 - tanhX * tanhX
+      case _ =>
+        throw new IllegalArgumentException(s"Unknown activation function: $ActivationFunction")
     }
   }
 
@@ -69,16 +89,10 @@ object ActivationManager {
         val arr = dotProduct(sigmoid(z),mat.toArray)
         arr
       case "SiLu"  =>
-        val silu = DenseVector.zeros[Float](z.length)
-        val derivative = DenseVector.zeros[Float](z.length)
-
-        for (i <- 0 until z.length) {
-          val x = z(i)
-          val sigmoid = 1.0f / (1.0f + exp(-x).toFloat)
-          silu(i) = x * sigmoid
-          derivative(i) = silu(i) + sigmoid * (1.0f - silu(i))
+        z.map { xi =>
+          val sigmoid = (1 / (1 + exp(-xi)))
+          (sigmoid + xi * sigmoid * (1 - sigmoid))
         }
-        derivative.toArray
       case "Tanh" =>
         val tanhX = tanh(new DenseVector(z)).toArray
         (1.0f - DenseMatrix(dotProduct(tanhX, tanhX))).toArray

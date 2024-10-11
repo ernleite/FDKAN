@@ -1,11 +1,6 @@
 package com.deeplearning.bspline
 
 import breeze.linalg._
-import breeze.stats.distributions.Rand.FixedSeed.randBasis
-import breeze.stats.distributions._
-import com.deeplearning.Network
-
-import scala.util.Random
 
 object KnotPoints {
 
@@ -34,6 +29,7 @@ object KnotPoints {
 
     knots
   }
+
 
 
 }
